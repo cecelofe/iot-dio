@@ -1,0 +1,56 @@
+// Pines
+const int pinTemp    = A0;  // sensor LM35
+const int pinMotor   = 9;   // driver do motor (via transistor)
+const int pinLED     = 8;   // LED vermelho de emergência
+const int pinBuzzer  = 7;   // buzzer piezo
+
+// Limiares de temperatura (°C)
+const float LIMIAR_VENT = 30.0;
+const float LIMIAR_ALARME = 50.0;
+
+// Variáveis
+float temperatura;
+
+void setup() {
+  Serial.begin(9600);
+
+  pinMode(pinMotor,  OUTPUT);
+  pinMode(pinLED,    OUTPUT);
+  pinMode(pinBuzzer, OUTPUT);
+  
+  // Garante que tudo começa desligado
+  digitalWrite(pinMotor,  LOW);
+  digitalWrite(pinLED,    LOW);
+  digitalWrite(pinBuzzer, LOW);
+}
+
+void loop() {
+  // 1) Leitura da temperatura
+  int leitura = analogRead(pinTemp);
+  // Conversão para volts (supondo Vcc = 5V):
+  float volts = leitura * (5.0 / 1023.0);
+  // LM35 dá 10 mV / °C:
+  temperatura = volts * 100.0;
+
+  Serial.print("Temp = ");
+  Serial.print(temperatura);
+  Serial.println(" °C");
+
+  // 2) Aciona motor se >= 30 °C
+  if (temperatura >= LIMIAR_VENT) {
+    digitalWrite(pinMotor, HIGH);
+  } else {
+    digitalWrite(pinMotor, LOW);
+  }
+
+  // 3) Se ultrapassar 50 °C, aciona LED e buzina
+  if (temperatura > LIMIAR_ALARME) {
+    digitalWrite(pinLED,    HIGH);
+    digitalWrite(pinBuzzer, HIGH);
+  } else {
+    digitalWrite(pinLED,    LOW);
+    digitalWrite(pinBuzzer, LOW);
+  }
+
+  delay(500); // meio segundo entre leituras
+}
