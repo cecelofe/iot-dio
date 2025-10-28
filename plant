@@ -1,0 +1,117 @@
+from flask import Flask, render_template_string, Response, request, jsonify
+
+from ultralytics import YOLO
+
+import cv2, numpy as np, torch
+
+
+
+app = Flask(__name__)
+
+
+
+# ====== MODELO YOLO ======
+
+device = "mps" if torch.backends.mps.is_available() else "cpu"
+
+model = YOLO("yolov8n.pt")
+
+print(f"🚀 Rodando YOLO em: {device}")
+
+
+
+# ====== CÂMERA LOCAL ======
+
+camera = cv2.VideoCapture(0)
+
+
+
+# ====== STREAM AO VIVO ======
+
+def generate_frames():
+
+    while True:
+
+        success, frame = camera.read()
+
+        if not success:
+
+            break
+
+        results = model(frame, verbose=False)
+
+        annotated_frame = results[0].plot()
+
+        ret, buffer = cv2.imencode('.jpg', annotated_frame)
+
+        frame = buffer.tobytes()
+
+        yield (b'--frame\r\n'
+
+               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+
+
+
+# ====== ROTA PARA VÍDEO ======
+
+@app.route('/video')
+
+def video():
+
+    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+
+
+# ====== ROTA PARA DETECÇÃO (ESP32, por exemplo) ======
+
+@app.route('/detect', methods=['POST'])
+
+def detect():
+
+    np_arr = np.frombuffer(request.data, np.uint8)
+
+    frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+    results = model(frame, verbose=False)
+
+    labels = [model.names[int(box.cls[0])] for r in results for box in r.boxes]
+
+    print(f"🧠 Detectado: {labels}")
+
+    return jsonify({"detected": labels or ["none"]})
+
+
+
+# ====== DASHBOARD WEB ======
+
+@app.route('/')
+
+def index():
+
+    html = """
+
+    <html>
+
+    <head><title>🍓 Morangos12 -  ao vivo</title></head>
+
+    <body style="background:#000;color:#0f0;text-align:center;">
+
+        <h1>🍓 Morangos12 - YOLO IA Live</h1>
+
+        <img src="/video" width="80%" style="border:3px solid #0f0;border-radius:10px;">
+
+        <p>Transmitindo em tempo real via Flask + YOLOv8</p>
+
+    </body>
+
+    </html>
+
+    """
+
+    return render_template_string(html)
+
+
+
+if __name__ == '__main__':
+
+    app.run(host="0.0.0.0", port=5000)
